@@ -1,0 +1,152 @@
+<?php
+
+include 'db.php';
+include 'keyword_utils.php';
+
+// Get group name from URL or folder
+if (!isset($_GET['group'])) {
+    $group = basename(dirname(__FILE__));
+} else {
+    $group = preg_replace('/[^a-zA-Z0-9]/', '', $_GET['group']);
+}
+
+function getCount($conn, $sql) {
+    $result = $conn->query($sql);
+    $row = $result ? $result->fetch_row() : [0];
+    return (int) ($row[0] ?? 0);
+}
+
+$total_groups = getCount($conn, "SELECT COUNT(*) FROM groupdb");
+$total_assets = getCount($conn, "SELECT COUNT(*) FROM assets");
+$total_specs = getCount($conn, "SELECT COUNT(*) FROM assets WHERE file_size IS NOT NULL OR mime_type IS NOT NULL OR original_filename IS NOT NULL");
+$total_tags = getCount($conn, "SELECT COUNT(*) FROM tags");
+
+$recent_assets = [];
+$recent_result = $conn->query("SELECT asset_id, title, group_id, file_type, file_size, upload_date, mandatory FROM assets ORDER BY upload_date DESC, asset_id DESC LIMIT 5");
+if ($recent_result) {
+    while ($row = $recent_result->fetch_assoc()) {
+        $recent_assets[] = $row;
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard | EduStream <?php echo htmlspecialchars($group); ?></title>
+    <style>
+        /* Base styles from your lecturer's provided code */
+        body { background: #0f0f0f; color: white; font-family: sans-serif; padding: 40px; margin: 0; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 40px; }
+        
+        /* Navigation/Tabs styling */
+        .nav-menu { display: flex; gap: 15px; margin-bottom: 30px; }
+        .nav-btn { padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; background: #222; color: #aaa; transition: 0.3s; border: 1px solid #333; }
+        .nav-btn.active, .nav-btn:hover { background: #00d2ff; color: #000; border-color: #00d2ff; }
+
+        /* Dashboard Summary Cards */
+        .dashboard-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 40px; }
+        .stat-card { background: rgba(255,255,255,0.02); border: 1px solid #444; border-left: 5px solid #00d2ff; border-radius: 8px; padding: 25px; }
+        .stat-title { font-size: 1rem; color: #aaa; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 2.5rem; font-weight: bold; color: white; }
+
+        /* Table Styling */
+        .section-title { font-size: 1.5rem; margin-bottom: 20px; color: white; }
+        .table-container { border: 1px solid #444; border-radius: 12px; overflow: hidden; background: rgba(255,255,255,0.02); }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 18px 25px; border-bottom: 1px solid #333; font-size: 1.1rem; }
+        th { background: #161616; color: #00d2ff; font-size: 1rem; text-transform: uppercase; letter-spacing: 1px; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: rgba(255,255,255,0.04); transition: 0.2s; }
+        
+        /* Badges for Mandatory status */
+        .badge-yes { background: rgba(0, 210, 255, 0.2); color: #00d2ff; padding: 5px 12px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
+        .badge-no { background: rgba(255, 255, 255, 0.1); color: #aaa; padding: 5px 12px; border-radius: 20px; font-size: 0.9rem; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div>
+        <h1 style="margin: 0; color: #00d2ff;">EduStream Admin</h1>
+        <p style="margin: 5px 0 0 0; color: #aaa;">Overview of multimedia assets, groups, technical specifications, and tags</p>
+    </div>
+    <div style="border: 1px solid #00d2ff; padding: 10px 25px; font-size: 1.6rem; border-radius: 5px; font-weight: bold;">
+        GROUP: <?php echo htmlspecialchars($group); ?>
+    </div>
+</div>
+
+<div class="nav-menu">
+    <a href="dashboard.php" class="nav-btn active">Dashboard</a>
+    <a href="groups.php" class="nav-btn">Groups Management</a>
+    <a href="assets.php" class="nav-btn">Assets Management</a>
+    <a href="tags.php" class="nav-btn">Tags Management</a>
+    <a href="keyword_extractor.php" class="nav-btn">Keyword Extractor</a>
+    <a href="search.php" class="nav-btn">Search</a>
+    <a href="index.php" class="nav-btn" style="margin-left: auto;">View Members List</a>
+</div>
+
+<div class="dashboard-summary">
+    <div class="stat-card">
+        <div class="stat-title">Total Groups</div>
+        <div class="stat-value"><?php echo $total_groups; ?></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Total Assets</div>
+        <div class="stat-value"><?php echo $total_assets; ?></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Technical Specs</div>
+        <div class="stat-value"><?php echo $total_specs; ?></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-title">Total Tags</div>
+        <div class="stat-value"><?php echo $total_tags; ?></div>
+    </div>
+</div>
+
+<h2 class="section-title">Recent Multimedia Assets</h2>
+<div class="table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>#</th> <th>Asset ID</th>
+                <th>Title</th>
+                <th>Group</th>
+                <th>File Type</th>
+                <th>Size</th>
+                <th>Uploaded</th>
+                <th>Mandatory</th>
+            </tr>
+        </thead>
+        <tbody>
+            <?php 
+            $counter = 1; // Initialized the counter here
+            foreach ($recent_assets as $asset): 
+            ?>
+                <tr>
+                    <td style="color: #aaa; font-weight: bold;"><?php echo $counter++; ?></td>
+                    <td style="color: #00d2ff; font-family: monospace; font-weight: bold;"><?php echo htmlspecialchars($asset['asset_id']); ?></td>
+                    <td><?php echo htmlspecialchars($asset['title']); ?></td>
+                    <td><?php echo htmlspecialchars($asset['group_id']); ?></td>
+                    <td><?php echo htmlspecialchars($asset['file_type']); ?></td>
+                    <td><?php echo htmlspecialchars($asset['file_size'] ? formatUploadBytes($asset['file_size']) : '-'); ?></td>
+                    <td><?php echo htmlspecialchars($asset['upload_date'] ?: '-'); ?></td>
+                    <td>
+                        <span class="<?php echo $asset['mandatory'] === 'Yes' ? 'badge-yes' : 'badge-no'; ?>">
+                            <?php echo htmlspecialchars($asset['mandatory']); ?>
+                        </span>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            <?php if (empty($recent_assets)): ?>
+                <tr>
+                    <td colspan="8" style="text-align: center; color: #aaa;">No assets uploaded yet.</td>
+                </tr>
+            <?php endif; ?>
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>
